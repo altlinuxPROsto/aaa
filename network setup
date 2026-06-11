@@ -1,0 +1,631 @@
+Команды настройки сети
+Вариант №1: GRE, OSPF, DHCP, VLAN, STP, EtherChannel, SSH, Port Security
+ 
+Схема сети из задания
+Примечание: номера интерфейсов приняты по типовой схеме Packet Tracer. Если в твоей схеме используются другие порты, замени только имена интерфейсов, не меняя логику команд.
+1. Принятые подключения
+Линк	Интерфейсы
+ISP — R1	ISP G0/0 ↔ R1 G0/0
+ISP — R2	ISP G0/1 ↔ R2 G0/0
+R1 — SW1	R1 G0/1 ↔ SW1 G0/1
+SW1 — SW2	SW1 F0/1 ↔ SW2 F0/1
+SW1 — SW3	SW1 F0/2 ↔ SW3 F0/1
+SW2 — SW3	SW2 F0/2 ↔ SW3 F0/2
+R2 — SW4	R2 G0/1 ↔ SW4 G0/1
+SW4 — SW5 EtherChannel	SW4 F0/23-24 ↔ SW5 F0/23-24
+
+2. IP-адресация
+Устройство	Интерфейс	IP
+ISP	G0/0	10.0.0.1/30
+ISP	G0/1	10.0.0.5/30
+R1	G0/0	10.0.0.2/30
+R1	G0/1.10	192.168.10.1/26
+R1	G0/1.20	192.168.10.65/27
+R1	G0/1.30	192.168.10.97/27
+R1	Tunnel0	192.168.255.1/30
+R2	G0/0	10.0.0.6/30
+R2	G0/1	172.16.20.1/24
+R2	Tunnel0	192.168.255.2/30
+SW1	VLAN 10	192.168.10.2/26
+SW2	VLAN 10	192.168.10.3/26
+SW3	VLAN 10	192.168.10.4/26
+SW4	VLAN 1	172.16.20.2/24
+SW5	VLAN 1	172.16.20.3/24
+
+3. VLAN Left
+VLAN	Подсеть	Gateway
+VLAN 10	192.168.10.0/26	192.168.10.1
+VLAN 20	192.168.10.64/27	192.168.10.65
+VLAN 30	192.168.10.96/27	192.168.10.97
+
+4. Команды настройки устройств
+ISP
+enable
+conf t
+hostname ISP
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+interface g0/0
+ description TO-R1
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+exit
+ 
+interface g0/1
+ description TO-R2
+ ip address 10.0.0.5 255.255.255.252
+ no shutdown
+exit
+ 
+end
+wr
+
+R1
+enable
+conf t
+hostname R1
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+interface g0/0
+ description TO-ISP
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+exit
+ 
+interface g0/1
+ description TO-SW1-TRUNK
+ no ip address
+ no shutdown
+exit
+ 
+interface g0/1.10
+ description VLAN10
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.192
+exit
+ 
+interface g0/1.20
+ description VLAN20
+ encapsulation dot1Q 20
+ ip address 192.168.10.65 255.255.255.224
+exit
+ 
+interface g0/1.30
+ description VLAN30
+ encapsulation dot1Q 30
+ ip address 192.168.10.97 255.255.255.224
+exit
+ 
+ip route 10.0.0.4 255.255.255.252 10.0.0.1
+ 
+interface Tunnel0
+ description GRE-TO-R2
+ ip address 192.168.255.1 255.255.255.252
+ tunnel source g0/0
+ tunnel destination 10.0.0.6
+ no shutdown
+exit
+ 
+ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp excluded-address 192.168.10.65 192.168.10.70
+ip dhcp excluded-address 192.168.10.97 192.168.10.100
+ 
+ip dhcp pool VLAN10
+ network 192.168.10.0 255.255.255.192
+ default-router 192.168.10.1
+ dns-server 8.8.8.8
+exit
+ 
+ip dhcp pool VLAN20
+ network 192.168.10.64 255.255.255.224
+ default-router 192.168.10.65
+ dns-server 8.8.8.8
+exit
+ 
+ip dhcp pool VLAN30
+ network 192.168.10.96 255.255.255.224
+ default-router 192.168.10.97
+ dns-server 8.8.8.8
+exit
+ 
+router ospf 1
+ router-id 1.1.1.1
+ passive-interface default
+ no passive-interface Tunnel0
+ network 192.168.255.0 0.0.0.3 area 0
+ network 192.168.10.0 0.0.0.63 area 0
+ network 192.168.10.64 0.0.0.31 area 0
+ network 192.168.10.96 0.0.0.31 area 0
+exit
+ 
+end
+wr
+
+R2
+enable
+conf t
+hostname R2
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+interface g0/0
+ description TO-ISP
+ ip address 10.0.0.6 255.255.255.252
+ no shutdown
+exit
+ 
+interface g0/1
+ description TO-SW4
+ ip address 172.16.20.1 255.255.255.0
+ no shutdown
+exit
+ 
+ip route 10.0.0.0 255.255.255.252 10.0.0.5
+ 
+interface Tunnel0
+ description GRE-TO-R1
+ ip address 192.168.255.2 255.255.255.252
+ tunnel source g0/0
+ tunnel destination 10.0.0.2
+ no shutdown
+exit
+ 
+ip dhcp excluded-address 172.16.20.1 172.16.20.20
+ 
+ip dhcp pool RIGHT
+ network 172.16.20.0 255.255.255.0
+ default-router 172.16.20.1
+ dns-server 8.8.8.8
+exit
+ 
+router ospf 1
+ router-id 2.2.2.2
+ passive-interface default
+ no passive-interface Tunnel0
+ network 192.168.255.0 0.0.0.3 area 0
+ network 172.16.20.0 0.0.0.255 area 0
+exit
+ 
+end
+wr
+
+SW1
+enable
+conf t
+hostname SW1
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+vlan 10
+ name VLAN10
+exit
+vlan 20
+ name VLAN20
+exit
+vlan 30
+ name VLAN30
+exit
+ 
+interface vlan 10
+ ip address 192.168.10.2 255.255.255.192
+ no shutdown
+exit
+ 
+ip default-gateway 192.168.10.1
+ 
+interface g0/1
+ description TO-R1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+interface f0/1
+ description TO-SW2
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+interface f0/2
+ description TO-SW3
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+spanning-tree mode pvst
+spanning-tree vlan 10,20,30 priority 4096
+ 
+end
+wr
+
+SW2
+enable
+conf t
+hostname SW2
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+vlan 10
+ name VLAN10
+exit
+vlan 20
+ name VLAN20
+exit
+vlan 30
+ name VLAN30
+exit
+ 
+interface vlan 10
+ ip address 192.168.10.3 255.255.255.192
+ no shutdown
+exit
+ 
+ip default-gateway 192.168.10.1
+ 
+interface f0/1
+ description TO-SW1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+interface f0/2
+ description TO-SW3
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+interface range f0/10-19
+ description VLAN10-ACCESS
+ switchport mode access
+ switchport access vlan 10
+ switchport port-security
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+ 
+interface range f0/20-29
+ description VLAN20-ACCESS
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+ 
+spanning-tree mode pvst
+spanning-tree vlan 10,20,30 priority 8192
+ 
+end
+wr
+
+SW3
+enable
+conf t
+hostname SW3
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+vlan 10
+ name VLAN10
+exit
+vlan 20
+ name VLAN20
+exit
+vlan 30
+ name VLAN30
+exit
+ 
+interface vlan 10
+ ip address 192.168.10.4 255.255.255.192
+ no shutdown
+exit
+ 
+ip default-gateway 192.168.10.1
+ 
+interface f0/1
+ description TO-SW1
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+interface f0/2
+ description TO-SW2
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+exit
+ 
+interface range f0/10-19
+ description VLAN30-ACCESS
+ switchport mode access
+ switchport access vlan 30
+ switchport port-security
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+ 
+spanning-tree mode pvst
+spanning-tree vlan 10,20,30 priority 12288
+ 
+end
+wr
+
+SW4
+enable
+conf t
+hostname SW4
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+interface vlan 1
+ ip address 172.16.20.2 255.255.255.0
+ no shutdown
+exit
+ 
+ip default-gateway 172.16.20.1
+ 
+interface g0/1
+ description TO-R2
+ switchport mode access
+ switchport access vlan 1
+ no shutdown
+exit
+ 
+interface range f0/23-24
+ description LACP-TO-SW5
+ switchport mode trunk
+ channel-protocol lacp
+ channel-group 1 mode active
+ no shutdown
+exit
+ 
+interface port-channel 1
+ description LACP-TO-SW5
+ switchport mode trunk
+ no shutdown
+exit
+ 
+interface f0/10
+ description TO-PC3
+ switchport mode access
+ switchport access vlan 1
+ switchport port-security
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+ 
+end
+wr
+
+SW5
+enable
+conf t
+hostname SW5
+ 
+enable secret securepass1
+service password-encryption
+ 
+line console 0
+ password console123
+ login
+ logging synchronous
+exit
+ 
+ip domain-name example.com
+username admin secret sshpassword1
+crypto key generate rsa modulus 1024
+ip ssh version 2
+ 
+line vty 0 4
+ login local
+ transport input ssh
+exit
+ 
+interface vlan 1
+ ip address 172.16.20.3 255.255.255.0
+ no shutdown
+exit
+ 
+ip default-gateway 172.16.20.1
+ 
+interface range f0/23-24
+ description LACP-TO-SW4
+ switchport mode trunk
+ channel-protocol lacp
+ channel-group 1 mode active
+ no shutdown
+exit
+ 
+interface port-channel 1
+ description LACP-TO-SW4
+ switchport mode trunk
+ no shutdown
+exit
+ 
+interface f0/10
+ description TO-PC4
+ switchport mode access
+ switchport access vlan 1
+ switchport port-security
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+ 
+end
+wr
+
+5. Настройка ПК
+На всех ПК включить DHCP.
+ПК	Коммутатор/порт	VLAN	DHCP-сеть
+PC0	SW2 F0/10	10	192.168.10.0/26
+PC5	SW2 F0/11	10	192.168.10.0/26
+PC2	SW2 F0/20	20	192.168.10.64/27
+PC1	SW3 F0/10	30	192.168.10.96/27
+PC3	SW4 F0/10	1	172.16.20.0/24
+PC4	SW5 F0/10	1	172.16.20.0/24
+
+6. Проверка
+show ip interface brief
+show interfaces tunnel 0
+show ip ospf neighbor
+show ip route ospf
+show spanning-tree vlan 10
+show spanning-tree vlan 20
+show spanning-tree vlan 30
+show etherchannel summary
+show port-security
+show port-security interface f0/10
+show ip dhcp binding
+
+7. Проверка связности
+ping 192.168.255.2
+ping 172.16.20.1
+ping 192.168.10.1
+ping 192.168.10.65
+ping 192.168.10.97
+
+8. Если WAN-интерфейсы Serial
+Если в Packet Tracer у роутеров WAN-интерфейсы Serial, вместо G0/0/G0/1 используй свои S0/0/0 и S0/0/1. На DCE-стороне добавь:
+clock rate 64000
+
